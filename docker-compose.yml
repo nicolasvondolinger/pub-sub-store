@@ -2,32 +2,33 @@ version: "3"
 
 services:
   q-rabbitmq:
-    container_name: q-rabbitmq
     image: rabbitmq:3-management
+    container_name: q-rabbitmq
     hostname: q-rabbitmq-broker
     restart: unless-stopped
     networks:
       - q-rabbitmq-network
+      - q-back-tier
     ports:
       - "5672:5672"
       - "15672:15672"
     env_file:
       - rabbitmq/q-rabbitmq-auth.env
-    # Do some health checks to see if q-rabbitmq is running before starting the other services
-    healthcheck: 
+    healthcheck:
       test: rabbitmq-diagnostics -q status
       interval: 15s
       timeout: 15s
       retries: 5
 
   contact-service:
-    container_name: contact-service
     build:
       context: .
       target: contact-service
+    container_name: contact-service
     restart: unless-stopped
     networks:
       - q-rabbitmq-network
+      - q-back-tier
     env_file:
       - services/contact/.env
     depends_on:
@@ -35,13 +36,14 @@ services:
         condition: service_healthy
 
   order-service:
-    container_name: order-service
     build:
       context: .
       target: order-service
+    container_name: order-service
     restart: unless-stopped
     networks:
       - q-rabbitmq-network
+      - q-back-tier
     env_file:
       - services/order/.env
     depends_on:
@@ -49,18 +51,39 @@ services:
         condition: service_healthy
 
   shipping-service:
-    container_name: shipping-service
     build:
       context: .
       target: shipping-service
+    container_name: shipping-service
     restart: unless-stopped
     networks:
       - q-rabbitmq-network
+      - q-back-tier
     env_file:
       - services/shipping/.env
     depends_on:
       q-rabbitmq:
         condition: service_healthy
 
+  report-service:
+    build:
+      context: .
+      target: report-service
+    container_name: report-service
+    restart: unless-stopped
+    networks:
+      - q-back-tier
+    environment:
+      RABBITMQ_HOST: q-rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: guest
+      RABBITMQ_PASSWORD: guest
+    depends_on:
+      q-rabbitmq:
+        condition: service_healthy
+
 networks:
   q-rabbitmq-network:
+    driver: bridge
+  q-back-tier:
+    driver: bridge
